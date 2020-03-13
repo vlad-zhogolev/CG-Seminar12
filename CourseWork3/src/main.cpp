@@ -114,6 +114,9 @@ int main()
     Shader shader("shaders/pbr.vert", "shaders/pbr.frag");   
     Shader shaderLightBox("shaders/deferred_light_box.vert", "shaders/deferred_light_box.frag");
     Shader skyboxShader("shaders/skybox.vert", "shaders/skybox.frag");
+
+    // Shaders for shadows
+    Shader pointShadowsShader("shaders/point_shadows.vert", "shaders/point_shadows.frag");
     Shader simpleDepthShader("shaders/point_shadows_depth.vert", "shaders/point_shadows_depth.frag", "shaders/point_shadows_depth.geom");
     
     // Load scene   
