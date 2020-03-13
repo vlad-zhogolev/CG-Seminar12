@@ -114,6 +114,7 @@ int main()
     Shader shader("shaders/pbr.vert", "shaders/pbr.frag");   
     Shader shaderLightBox("shaders/deferred_light_box.vert", "shaders/deferred_light_box.frag");
     Shader skyboxShader("shaders/skybox.vert", "shaders/skybox.frag");
+    Shader simpleDepthShader("shaders/point_shadows_depth.vert", "shaders/point_shadows_depth.frag", "shaders/point_shadows_depth.geom");
     
     // Load scene   
     SceneLoader sceneLoader;
@@ -134,10 +135,10 @@ int main()
     // Set shader in use
     shader.use();
 
-	// Setup sun
-	shader.setVec3("sun.color",		sun.getColor());
-	shader.setVec3("sun.direction", sun.getDirection());
-	shader.setBool("sun.isOn",		sun.isOn());
+    // Setup sun
+    shader.setVec3("sun.color",     sun.getColor());
+    shader.setVec3("sun.direction", sun.getDirection());
+    shader.setBool("sun.isOn",      sun.isOn());
 
     // Setup point lights
     PointLights::size_type pointLightsNumber = min(MAX_NUMBER_OF_POINT_LIGHTS, pointLights.size());   
@@ -215,8 +216,8 @@ int main()
             objects[i].getModel()->Draw(shader);
         }                
 
-		shader.setVec3("sun.direction", sun.getDirection());
-		shader.setVec3("sun.color",		sun.getColor());
+        shader.setVec3("sun.direction", sun.getDirection());
+        shader.setVec3("sun.color",     sun.getColor());
 
         // Update point lights state
         for (PointLights::size_type i = 0; i < pointLights.size(); ++i)
@@ -616,37 +617,37 @@ unsigned int loadCubemap(vector<std::string> faces)
 
 unsigned int loadTexture(char const * path)
 {
-	unsigned int textureID;
-	glGenTextures(1, &textureID);
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
 
-	int width, height, nrComponents;
-	unsigned char *data = stbi_load(path, &width, &height, &nrComponents, 0);
-	if (data)
-	{
-		GLenum format;
-		if (nrComponents == 1)
-			format = GL_RED;
-		else if (nrComponents == 3)
-			format = GL_RGB;
-		else if (nrComponents == 4)
-			format = GL_RGBA;
+    int width, height, nrComponents;
+    unsigned char *data = stbi_load(path, &width, &height, &nrComponents, 0);
+    if (data)
+    {
+        GLenum format;
+        if (nrComponents == 1)
+            format = GL_RED;
+        else if (nrComponents == 3)
+            format = GL_RGB;
+        else if (nrComponents == 4)
+            format = GL_RGBA;
 
-		glBindTexture(GL_TEXTURE_2D, textureID);
-		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-		glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, format == GL_RGBA ? GL_CLAMP_TO_EDGE : GL_REPEAT); // for this tutorial: use GL_CLAMP_TO_EDGE to prevent semi-transparent borders. Due to interpolation it takes texels from next repeat 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, format == GL_RGBA ? GL_CLAMP_TO_EDGE : GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, format == GL_RGBA ? GL_CLAMP_TO_EDGE : GL_REPEAT); // for this tutorial: use GL_CLAMP_TO_EDGE to prevent semi-transparent borders. Due to interpolation it takes texels from next repeat 
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, format == GL_RGBA ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-		stbi_image_free(data);
-	}
-	else
-	{
-		std::cout << "Texture failed to load at path: " << path << std::endl;
-		stbi_image_free(data);
-	}
+        stbi_image_free(data);
+    }
+    else
+    {
+        std::cout << "Texture failed to load at path: " << path << std::endl;
+        stbi_image_free(data);
+    }
 
-	return textureID;
+    return textureID;
 }
