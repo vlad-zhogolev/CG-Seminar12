@@ -229,7 +229,7 @@ int main()
 
     auto woodTexture = loadTexture("data/textures/cube/container.png");
 
-    auto createAndConfigureFramebuffer = [] (GLuint& framebuffer, GLuint& texture)
+    auto createAndConfigureFramebuffer = [] (GLuint& framebuffer, GLuint& texture, GLuint& depthBuffer)
     {
         glGenFramebuffers(1, &framebuffer);
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -241,6 +241,16 @@ int main()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
 
+        glGenRenderbuffers(1, &depthBuffer);
+        glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, screenWidth, screenHeight);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+        // finally check if framebuffer is complete
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        {
+            std::cout << "Framebuffer not complete!" << std::endl;
+        }
+
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     };
@@ -248,15 +258,18 @@ int main()
     // Configure framebuffers for light rendering and color blending
     GLuint lightRenderFramebuffer;
     GLuint lightRenderTexture;
-    createAndConfigureFramebuffer(lightRenderFramebuffer, lightRenderTexture);
+    GLuint lightDepthBuffer;
+    createAndConfigureFramebuffer(lightRenderFramebuffer, lightRenderTexture, lightDepthBuffer);
 
     GLuint currentBlendingFramebuffer;
     GLuint currentBlendingTexture;
-    createAndConfigureFramebuffer(currentBlendingFramebuffer, currentBlendingTexture);
+    GLuint currentBlendingDepthBuffer;
+    createAndConfigureFramebuffer(currentBlendingFramebuffer, currentBlendingTexture, currentBlendingDepthBuffer);
 
     GLuint blendedFramebuffer;
     GLuint blendedTexture;
-    createAndConfigureFramebuffer(blendedFramebuffer, blendedTexture);
+    GLuint blendedDepthBuffer;
+    createAndConfigureFramebuffer(blendedFramebuffer, blendedTexture, blendedDepthBuffer);
 
     bool isFirstBlendingFramebufferUsed = true;
 
@@ -269,13 +282,7 @@ int main()
     textureRenderingShader.use();
     textureRenderingShader.setInt("sourceTexture", 0);
 
-    std::vector<glm::vec3> pointLightsTest
-    {
-         {0.f, 0.f  , 0.f }
-        ,{0.f, 0.75f, 0.f }
-        ,{0.f, 0.25f, 0.5f}
-    };
-    
+ 
 
     // Render loop    
     while (!glfwWindowShouldClose(window))
@@ -390,7 +397,7 @@ int main()
         // glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (!pointLightsTest.empty())
+        if (!pointLights.empty())
         {
             glEnable(GL_DEPTH_TEST);
             glm::vec3 lightPos = pointLights[0].getPosition();
@@ -512,12 +519,29 @@ int main()
             std::swap(currentBlendingTexture, blendedTexture);
         }
 
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, blendedFramebuffer);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        
+        // blit to default framebuffer.                                           
+        glBlitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         textureRenderingShader.use();
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, blendedTexture);
         renderScreenQuad();
         glBindTexture(GL_TEXTURE_2D, 0);       
         
+        glEnable(GL_DEPTH_TEST);
+        // Setup skybox shader and OpenGL for skybox rendering
+        skyboxShader.use();
+        skyboxShader.setMat4("projection", projection);
+        skyboxShader.setMat4("view", glm::mat4(glm::mat3(camera.GetViewMatrix())));
+        skyboxShader.setInt("skybox", SKYBOX_TEXTURE_INDEX);
+
+        // Render skybox
+        renderSkybox(cubemapTexture);
+
         // Input
         processInput(window, lightManager);
 
