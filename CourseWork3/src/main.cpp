@@ -373,7 +373,7 @@ int main()
         */
 
         // move light position over time
-        //lightPos.z = sin(glfwGetTime() * 0.5) * 3.0;
+        lightPos.z = sin(glfwGetTime() * 0.5) * 3.0;
 
         // render
         // ------
@@ -456,7 +456,7 @@ int main()
         // 2. render scene as normal 
         // -------------------------
         glViewport(0, 0, screenWidth, screenHeight);
-        //glBindFramebuffer(GL_FRAMEBUFFER, lightRenderFramebuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, lightRenderFramebuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         pointShadowsShader.use();
         pointShadowsShader.setMat4("projection", projection);
@@ -501,7 +501,7 @@ void renderScene(const Shader &shader)
 {
     // room cube
     glm::mat4 model = glm::mat4(1.0f);
-    model = glm::scale(model, glm::vec3(5.0f));
+    model = glm::scale(model, glm::vec3(8.0f));
     shader.setMat4("model", model);
     glDisable(GL_CULL_FACE); // note that we disable culling here since we render 'inside' the cube instead of the usual 'outside' which throws off the normal culling methods.
     shader.setInt("reverse_normals", 1); // A small little hack to invert normals when drawing cube from the inside so lighting still works.
