@@ -11,6 +11,6 @@ void main()
 {
     vec3 color1 = texture(sourceTexture1, TexCoords).rgb;
     vec3 color2 = texture(sourceTexture2, TexCoords).rgb;
-    vec3 color = mix(color1, color2, 0.5);
-    FragColor = vec4(color, 1.0);
+    //vec3 color = mix(color1, color2, 0.5);
+    FragColor = vec4(color1 + color2, 1.0);
 } 
