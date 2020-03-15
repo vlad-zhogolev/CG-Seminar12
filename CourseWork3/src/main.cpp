@@ -132,6 +132,7 @@ int main()
         "shaders/point_shadows_depth.geom"
     );
     Shader shadowAccumulatorShader("shaders/shadow_accumulator.vert", "shaders/shadow_accumulator.frag");
+    Shader textureRenderingShader("shaders/textureRendering.vert", "shaders/textureRendering.frag");
     
     // Load scene   
     SceneLoader sceneLoader;
@@ -249,13 +250,13 @@ int main()
     GLuint lightRenderTexture;
     createAndConfigureFramebuffer(lightRenderFramebuffer, lightRenderTexture);
 
-    GLuint blendingFramebuffer1;
-    GLuint blendingTexture1;
-    createAndConfigureFramebuffer(blendingFramebuffer1, blendingTexture1);
+    GLuint currentBlendingFramebuffer;
+    GLuint currentBlendingTexture;
+    createAndConfigureFramebuffer(currentBlendingFramebuffer, currentBlendingTexture);
 
-    GLuint blendingFramebuffer2;
-    GLuint blendingTexture2;
-    createAndConfigureFramebuffer(blendingFramebuffer2, blendingTexture2);
+    GLuint blendedFramebuffer;
+    GLuint blendedTexture;
+    createAndConfigureFramebuffer(blendedFramebuffer, blendedTexture);
 
     bool isFirstBlendingFramebufferUsed = true;
 
@@ -264,14 +265,21 @@ int main()
     shadowAccumulatorShader.setInt("sourceTexture1", 0);
     shadowAccumulatorShader.setInt("sourceTexture2", 1);
 
-    glm::vec3 lightPos(0.f, 0.f, 0.f);
-    glm::vec3 lightPos2(0.f, 0.75f, 0.f);
+    // Configure texture rendering shader
+    textureRenderingShader.use();
+    textureRenderingShader.setInt("sourceTexture", 0);
+
+    std::vector<glm::vec3> pointLightsTest
+    {
+         {0.f, 0.f  , 0.f }
+        ,{0.f, 0.75f, 0.f }
+        ,{0.f, 0.25f, 0.5f}
+    };
+    
 
     // Render loop    
     while (!glfwWindowShouldClose(window))
     {
-        glEnable(GL_DEPTH_TEST);
-
         // Per-frame time logic        
         float currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
@@ -373,115 +381,142 @@ int main()
         */
 
         // move light position over time
-        lightPos.z = sin(glfwGetTime() * 0.5) * 3.0;
+        //lightPos.z = sin(glfwGetTime() * 0.5) * 3.0;
 
-        // render
-        // ------
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // 0. create depth cubemap transformation matrices
-        // -----------------------------------------------
-        float near_plane = 1.0f;
-        float far_plane = 25.0f;
-        glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_plane, far_plane);
-        std::vector<glm::mat4> shadowTransforms;
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
 
-        // 1. render scene to depth cubemap
-        // --------------------------------
-        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        simpleDepthShader.use();
-        for (unsigned int i = 0; i < 6; ++i)
+        // // render
+        // // ------
+        // glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        if (!pointLightsTest.empty())
         {
-            simpleDepthShader.setMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+            glEnable(GL_DEPTH_TEST);
+            glm::vec3 lightPos = pointLights[0].getPosition();
+            // 0. create depth cubemap transformation matrices
+            // -----------------------------------------------
+            float near_plane = 1.0f;
+            float far_plane = 25.0f;
+            glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_plane, far_plane);
+            std::vector<glm::mat4> shadowTransforms;
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+
+            // 1. render scene to depth cubemap
+            // --------------------------------
+            glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+            glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            simpleDepthShader.use();
+            for (unsigned int i = 0; i < 6; ++i)
+            {
+                simpleDepthShader.setMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+            }
+            simpleDepthShader.setFloat("far_plane", far_plane);
+            simpleDepthShader.setVec3("lightPos", lightPos);
+            renderScene(simpleDepthShader);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            // 2. render scene as normal 
+            // -------------------------
+            glViewport(0, 0, screenWidth, screenHeight);
+            glBindFramebuffer(GL_FRAMEBUFFER, blendedFramebuffer);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            pointShadowsShader.use();
+            pointShadowsShader.setMat4("projection", projection);
+            pointShadowsShader.setMat4("view", view);
+            // set lighting uniforms
+            pointShadowsShader.setVec3("lightPos", lightPos);
+            pointShadowsShader.setVec3("viewPos", camera.Position);
+            pointShadowsShader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
+            pointShadowsShader.setFloat("far_plane", far_plane);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, woodTexture);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
+            renderScene(pointShadowsShader);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         }
-        simpleDepthShader.setFloat("far_plane", far_plane);
-        simpleDepthShader.setVec3("lightPos", lightPos);
-        renderScene(simpleDepthShader);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // 2. render scene as normal 
-        // -------------------------
-        glViewport(0, 0, screenWidth, screenHeight);
-        glBindFramebuffer(GL_FRAMEBUFFER, blendingFramebuffer1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        pointShadowsShader.use();
-        pointShadowsShader.setMat4("projection", projection);
-        pointShadowsShader.setMat4("view", view);
-        // set lighting uniforms
-        pointShadowsShader.setVec3("lightPos", lightPos);
-        pointShadowsShader.setVec3("viewPos", camera.Position);
-        pointShadowsShader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
-        pointShadowsShader.setFloat("far_plane", far_plane);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, woodTexture);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-        renderScene(pointShadowsShader);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // 0. create depth cubemap transformation matrices
-        // -----------------------------------------------
-        shadowTransforms.clear();
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos2, lightPos2 + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos2, lightPos2 + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos2, lightPos2 + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos2, lightPos2 + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos2, lightPos2 + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos2, lightPos2 + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
-
-        // 1. render scene to depth cubemap
-        // --------------------------------
-        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        simpleDepthShader.use();
-        for (unsigned int i = 0; i < 6; ++i)
+        for (auto i = 1; i < pointLights.size(); ++i)
         {
-            simpleDepthShader.setMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+            glEnable(GL_DEPTH_TEST);
+            glm::vec3 lightPos = pointLights[i].getPosition();
+            // 0. create depth cubemap transformation matrices
+            // -----------------------------------------------
+            float near_plane = 1.0f;
+            float far_plane = 25.0f;
+            glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_plane, far_plane);
+            std::vector<glm::mat4> shadowTransforms;
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, lightPos + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f)));
+
+            // 1. render scene to depth cubemap
+            // --------------------------------
+            glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+            glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            simpleDepthShader.use();
+            for (unsigned int i = 0; i < 6; ++i)
+            {
+                simpleDepthShader.setMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+            }
+            simpleDepthShader.setFloat("far_plane", far_plane);
+            simpleDepthShader.setVec3("lightPos", lightPos);
+            renderScene(simpleDepthShader);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            // 2. render scene as normal 
+            // -------------------------
+            glViewport(0, 0, screenWidth, screenHeight);
+            glBindFramebuffer(GL_FRAMEBUFFER, lightRenderFramebuffer);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            pointShadowsShader.use();
+            pointShadowsShader.setMat4("projection", projection);
+            pointShadowsShader.setMat4("view", view);
+            // set lighting uniforms
+            pointShadowsShader.setVec3("lightPos", lightPos);
+            pointShadowsShader.setVec3("viewPos", camera.Position);
+            pointShadowsShader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
+            pointShadowsShader.setFloat("far_plane", far_plane);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, woodTexture);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
+            renderScene(pointShadowsShader);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+                glDisable(GL_DEPTH_TEST);
+                glClear(GL_COLOR_BUFFER_BIT);
+                shadowAccumulatorShader.use();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, blendedTexture);
+                renderScreenQuad();
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
+
+            std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+            std::swap(currentBlendingTexture, blendedTexture);
         }
-        simpleDepthShader.setFloat("far_plane", far_plane);
-        simpleDepthShader.setVec3("lightPos", lightPos2);
-        renderScene(simpleDepthShader);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        // 2. render scene as normal 
-        // -------------------------
-        glViewport(0, 0, screenWidth, screenHeight);
-        glBindFramebuffer(GL_FRAMEBUFFER, lightRenderFramebuffer);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        pointShadowsShader.use();
-        pointShadowsShader.setMat4("projection", projection);
-        pointShadowsShader.setMat4("view", view);
-        // set lighting uniforms
-        pointShadowsShader.setVec3("lightPos", lightPos2);
-        pointShadowsShader.setVec3("viewPos", camera.Position);
-        pointShadowsShader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
-        pointShadowsShader.setFloat("far_plane", far_plane);
+        textureRenderingShader.use();
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, woodTexture);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-        renderScene(pointShadowsShader);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        glDisable(GL_DEPTH_TEST);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        shadowAccumulatorShader.use();
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, blendingTexture1);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+        glBindTexture(GL_TEXTURE_2D, blendedTexture);
         renderScreenQuad();
+        glBindTexture(GL_TEXTURE_2D, 0);       
         
         // Input
         processInput(window, lightManager);
@@ -501,7 +536,7 @@ void renderScene(const Shader &shader)
 {
     // room cube
     glm::mat4 model = glm::mat4(1.0f);
-    model = glm::scale(model, glm::vec3(8.0f));
+    model = glm::scale(model, glm::vec3(10.0f));
     shader.setMat4("model", model);
     glDisable(GL_CULL_FACE); // note that we disable culling here since we render 'inside' the cube instead of the usual 'outside' which throws off the normal culling methods.
     shader.setInt("reverse_normals", 1); // A small little hack to invert normals when drawing cube from the inside so lighting still works.
