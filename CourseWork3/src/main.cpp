@@ -778,7 +778,7 @@ void renderSkybox(unsigned int cubemapTexture){
     glDrawArrays(GL_TRIANGLES, 0, 36);
 
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-    glActiveTexture(0);
+    glActiveTexture(GL_TEXTURE0);
     glDepthFunc(GL_LESS);// glDepthMask(GL_TRUE);
     glBindVertexArray(0);
 }
