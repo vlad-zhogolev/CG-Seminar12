@@ -60,6 +60,7 @@ const PointLights::size_type        MAX_NUMBER_OF_POINT_LIGHTS          = 32;
 const SpotLights::size_type         MAX_NUMBER_OF_SPOT_LIGHTS           = 32;
 const DirectionalLights::size_type  MAX_NUMBER_OF_DIRECTIONAL_LIGHTS    = 4;
 const unsigned int                  SKYBOX_TEXTURE_INDEX                = 15;
+const unsigned int                  SHADOW_DEPTH_MAP_INDEX              = 14;
 
 // Scene contents
 DirectionalLight sun(glm::vec3(0, -1, 0), glm::vec3(0.98, 0.831, 0.25));
@@ -138,6 +139,12 @@ int main()
     );
     Shader shadowAccumulatorShader("shaders/shadow_accumulator.vert", "shaders/shadow_accumulator.frag");
     Shader textureRenderingShader("shaders/textureRendering.vert", "shaders/textureRendering.frag");
+
+    // PBR shadows
+    Shader pbrShadowsPointLightShader(
+        "shaders/pbr_with_shadows/point_light.vert",
+        "shaders/pbr_with_shadows/point_light.frag"
+    );
     
     // Load scene   
     SceneLoader sceneLoader;
@@ -403,12 +410,13 @@ int main()
         // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         auto renderPointLightWithShadows = [
             &simpleDepthShader, 
-            &pointShadowsShader,
+            &pbrShadowsPointLightShader,
             &view, 
             &projection, 
             &depthMapFBO, 
             &woodTexture, 
-            &depthCubemap](
+            &depthCubemap,
+            &cubemapTexture](
             PointLight& pointLight,
             GLuint& renderingFramebuffer)
         {
@@ -444,7 +452,15 @@ int main()
             }
             simpleDepthShader.setFloat("far_plane", far_plane);
             simpleDepthShader.setVec3("lightPos", lightPos);
-            renderScene(simpleDepthShader);
+            
+            for (unsigned int i = 0; i < objects.size(); i++)
+            {
+                glm::mat4 model = objects[i].getModelMatrix();
+                simpleDepthShader.setMat4("model", model);
+
+                objects[i].getModel()->Draw(simpleDepthShader);
+            }
+
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
             // 2. render scene as normal 
@@ -452,19 +468,48 @@ int main()
             glViewport(0, 0, screenWidth, screenHeight);
             glBindFramebuffer(GL_FRAMEBUFFER, renderingFramebuffer);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            pointShadowsShader.use();
-            pointShadowsShader.setMat4("projection", projection);
-            pointShadowsShader.setMat4("view", view);
-            // set lighting uniforms
-            pointShadowsShader.setVec3("lightPos", lightPos);
-            pointShadowsShader.setVec3("viewPos", camera.Position);
-            pointShadowsShader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
-            pointShadowsShader.setFloat("far_plane", far_plane);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, woodTexture);
-            glActiveTexture(GL_TEXTURE1);
+
+            pbrShadowsPointLightShader.use();
+            pbrShadowsPointLightShader.setMat4("projection", projection);
+            pbrShadowsPointLightShader.setMat4("view", view);
+
+            pbrShadowsPointLightShader.setVec3( "pointLight.position",  pointLight.getPosition());
+            pbrShadowsPointLightShader.setVec3( "pointLight.color",     pointLight.getColor());
+            pbrShadowsPointLightShader.setFloat("pointLight.constant",  pointLight.getConstant());
+            pbrShadowsPointLightShader.setFloat("pointLight.linear",    pointLight.getLinear());
+            pbrShadowsPointLightShader.setFloat("pointLight.quadratic", pointLight.getQuadratic());
+            pbrShadowsPointLightShader.setBool( "pointLight.isOn",      pointLight.isOn());
+
+            pbrShadowsPointLightShader.setVec3( "cameraPos", camera.Position);
+            pbrShadowsPointLightShader.setFloat("far_plane", far_plane);
+            //pbrShadowsPointLightShader.setInt(  "skybox", SKYBOX_TEXTURE_INDEX);
+            pbrShadowsPointLightShader.setInt(  "depthMap", SHADOW_DEPTH_MAP_INDEX);
+
+
+            glActiveTexture(GL_TEXTURE0 + SHADOW_DEPTH_MAP_INDEX);
             glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-            renderScene(pointShadowsShader);
+            // glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_INDEX);
+            // glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+            
+            // render models
+            // Render objects
+            for (unsigned int i = 0; i < objects.size(); i++)
+            {
+                glm::mat4 model = objects[i].getModelMatrix();
+                pbrShadowsPointLightShader.setMat4("model", model);
+
+                // Fixes normals in case of non-uniform model scaling
+                glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(model)));
+                pbrShadowsPointLightShader.setMat3("normalMatrix", normalMatrix);
+
+                objects[i].getModel()->Draw(pbrShadowsPointLightShader);
+            }
+
+            glActiveTexture(GL_TEXTURE0 + SHADOW_DEPTH_MAP_INDEX);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+            // glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_INDEX);
+            // glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         };
 
@@ -547,42 +592,42 @@ int main()
         {
             renderPointLightWithShadows(pointLights[0], blendedFramebuffer);            
         }
-        for (auto i = 1; i < pointLights.size(); ++i)
-        {
-            renderPointLightWithShadows(pointLights[i], lightRenderFramebuffer);
-            {
-                glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
-                glDisable(GL_DEPTH_TEST);
-                glClear(GL_COLOR_BUFFER_BIT);
-                shadowAccumulatorShader.use();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, blendedTexture);
-                renderScreenQuad();
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            }
-            std::swap(currentBlendingFramebuffer, blendedFramebuffer);
-            std::swap(currentBlendingTexture, blendedTexture);
-        }
-        for (auto i = 0; i < spotLights.size(); ++i)
-        {
-            renderSpotLightWithShadows(spotLights[i], lightRenderFramebuffer);
-            {
-                glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
-                glDisable(GL_DEPTH_TEST);
-                glClear(GL_COLOR_BUFFER_BIT);
-                shadowAccumulatorShader.use();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, blendedTexture);
-                renderScreenQuad();
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            }
-            std::swap(currentBlendingFramebuffer, blendedFramebuffer);
-            std::swap(currentBlendingTexture, blendedTexture);
-        }
+        //for (auto i = 1; i < pointLights.size(); ++i)
+        //{
+        //    renderPointLightWithShadows(pointLights[i], lightRenderFramebuffer);
+        //    {
+        //        glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+        //        glDisable(GL_DEPTH_TEST);
+        //        glClear(GL_COLOR_BUFFER_BIT);
+        //        shadowAccumulatorShader.use();
+        //        glActiveTexture(GL_TEXTURE0);
+        //        glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+        //        glActiveTexture(GL_TEXTURE1);
+        //        glBindTexture(GL_TEXTURE_2D, blendedTexture);
+        //        renderScreenQuad();
+        //        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        //    }
+        //    std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+        //    std::swap(currentBlendingTexture, blendedTexture);
+        //}
+        //for (auto i = 0; i < spotLights.size(); ++i)
+        //{
+        //    renderSpotLightWithShadows(spotLights[i], lightRenderFramebuffer);
+        //    {
+        //        glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+        //        glDisable(GL_DEPTH_TEST);
+        //        glClear(GL_COLOR_BUFFER_BIT);
+        //        shadowAccumulatorShader.use();
+        //        glActiveTexture(GL_TEXTURE0);
+        //        glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+        //        glActiveTexture(GL_TEXTURE1);
+        //        glBindTexture(GL_TEXTURE_2D, blendedTexture);
+        //        renderScreenQuad();
+        //        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        //    }
+        //    std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+        //    std::swap(currentBlendingTexture, blendedTexture);
+        //}
 
         glBindFramebuffer(GL_READ_FRAMEBUFFER, blendedFramebuffer);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
@@ -728,7 +773,11 @@ void renderSkybox(unsigned int cubemapTexture){
     glBindVertexArray(skyboxVAO);
     glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_INDEX);
     glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+
     glDrawArrays(GL_TRIANGLES, 0, 36);
+
+    glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_INDEX);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     glDepthFunc(GL_LESS);// glDepthMask(GL_TRUE);
     glBindVertexArray(0);
 }
@@ -1117,6 +1166,8 @@ unsigned int loadCubemap(vector<std::string> faces)
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
     return textureID;
 }  
