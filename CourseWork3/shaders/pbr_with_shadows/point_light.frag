@@ -145,7 +145,7 @@ float ShadowCalculation(vec3 fragPos)
     float bias = 0.05; // we use a much larger bias since depth is now in [near_plane, far_plane] range
     float shadow = currentDepth -  bias > closestDepth ? 1.0 : 0.0;        
     // display closestDepth as debug (to visualize depth cubemap)
-    // FragColor = vec4(vec3(closestDepth / far_plane), 1.0);    
+    //FragColor = vec4(vec3(closestDepth / far_plane), 1.0);    
         
     return shadow;
 }
@@ -168,7 +168,7 @@ void main()
     // reflectance equation
     vec3 Lo = calcPointLight(pointLight, material, WorldPos, directionToView, F0);
 
-    float shadow = 0.0;//ShadowCalculation(WorldPos);
+    float shadow = shadows ? ShadowCalculation(WorldPos) : 0.0;
     
     vec3 ambient = vec3(0.003) * material.albedo;
     vec3 color = ambient + (1.0 - shadow) * Lo;

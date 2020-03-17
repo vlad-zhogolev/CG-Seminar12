@@ -482,6 +482,7 @@ int main()
 
             pbrShadowsPointLightShader.setVec3( "cameraPos", camera.Position);
             pbrShadowsPointLightShader.setFloat("far_plane", far_plane);
+            pbrShadowsPointLightShader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
             //pbrShadowsPointLightShader.setInt(  "skybox", SKYBOX_TEXTURE_INDEX);
             pbrShadowsPointLightShader.setInt(  "depthMap", SHADOW_DEPTH_MAP_INDEX);
 
@@ -648,7 +649,7 @@ int main()
         skyboxShader.setMat4("projection", projection);
         skyboxShader.setMat4("view", glm::mat4(glm::mat3(camera.GetViewMatrix())));
         skyboxShader.setInt("skybox", SKYBOX_TEXTURE_INDEX);
-
+        
         // Render skybox
         renderSkybox(cubemapTexture);
 
@@ -776,8 +777,8 @@ void renderSkybox(unsigned int cubemapTexture){
 
     glDrawArrays(GL_TRIANGLES, 0, 36);
 
-    glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_INDEX);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    glActiveTexture(0);
     glDepthFunc(GL_LESS);// glDepthMask(GL_TRUE);
     glBindVertexArray(0);
 }

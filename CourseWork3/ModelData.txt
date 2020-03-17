@@ -22,7 +22,3 @@ data/models/glass_ball/ball.obj
 0 0 0
 1 1 1
 data/models/titanium_ball/ball.obj
-0 -3 0
-0 0 0
-0.01 0.01 0.01
-data/models/sponza_pbr/sponza.obj
