@@ -44,7 +44,7 @@ uniform samplerCube depthMap;
 uniform PointLight pointLight;
 uniform bool shadows;
 
-float far_plane;
+uniform float far_plane;
 
 vec3 getNormalFromMap()
 {

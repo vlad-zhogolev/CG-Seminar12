@@ -593,24 +593,24 @@ int main()
         {
             renderPointLightWithShadows(pointLights[0], blendedFramebuffer);            
         }
-        //for (auto i = 1; i < pointLights.size(); ++i)
-        //{
-        //    renderPointLightWithShadows(pointLights[i], lightRenderFramebuffer);
-        //    {
-        //        glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
-        //        glDisable(GL_DEPTH_TEST);
-        //        glClear(GL_COLOR_BUFFER_BIT);
-        //        shadowAccumulatorShader.use();
-        //        glActiveTexture(GL_TEXTURE0);
-        //        glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
-        //        glActiveTexture(GL_TEXTURE1);
-        //        glBindTexture(GL_TEXTURE_2D, blendedTexture);
-        //        renderScreenQuad();
-        //        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        //    }
-        //    std::swap(currentBlendingFramebuffer, blendedFramebuffer);
-        //    std::swap(currentBlendingTexture, blendedTexture);
-        //}
+        for (auto i = 1; i < pointLights.size(); ++i)
+        {
+            renderPointLightWithShadows(pointLights[i], lightRenderFramebuffer);
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+                glDisable(GL_DEPTH_TEST);
+                glClear(GL_COLOR_BUFFER_BIT);
+                shadowAccumulatorShader.use();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, blendedTexture);
+                renderScreenQuad();
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
+            std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+            std::swap(currentBlendingTexture, blendedTexture);
+        }
         //for (auto i = 0; i < spotLights.size(); ++i)
         //{
         //    renderSpotLightWithShadows(spotLights[i], lightRenderFramebuffer);
