@@ -425,7 +425,7 @@ int main()
             // 0. create depth cubemap transformation matrices
             // -----------------------------------------------
             float near_plane = 1.0f;
-            float far_plane = 25.0f;
+            float far_plane = 20.0f;
             glm::mat4 shadowProj = glm::perspective(
                 glm::radians(90.0f),
                 static_cast<float>(POINT_LIGHT_SHADOW_MAP_WIDTH) / static_cast<float>(POINT_LIGHT_SHADOW_MAP_HEIGHT),
@@ -591,7 +591,28 @@ int main()
 
         if (!pointLights.empty())
         {
-            renderPointLightWithShadows(pointLights[0], blendedFramebuffer);            
+            // TODO: find proper fix for depth bug
+            // When just one point light is rendered skybox disappeares - some depth issues.
+            // When two lights are rendered - skybox is rendered, but there are also depth issues
+            // Threee lights - normal rendering
+            // Seems the problem is in bounded depth buffer
+            // Binding lightRenderFramebuffer solved the issue but in cost of performance
+            renderPointLightWithShadows(pointLights[0], blendedFramebuffer);
+            renderPointLightWithShadows(pointLights[0], lightRenderFramebuffer);
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+                glDisable(GL_DEPTH_TEST);
+                glClear(GL_COLOR_BUFFER_BIT);
+                shadowAccumulatorShader.use();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, blendedTexture);
+                renderScreenQuad();
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
+            std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+            std::swap(currentBlendingTexture, blendedTexture);
         }
         for (auto i = 1; i < pointLights.size(); ++i)
         {
@@ -630,7 +651,8 @@ int main()
         //    std::swap(currentBlendingTexture, blendedTexture);
         //}
 
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, blendedFramebuffer);
+        // TODO: find proper fix for depth bug
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, lightRenderFramebuffer);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         
         // blit to default framebuffer.                                           
