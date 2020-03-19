@@ -141,6 +141,10 @@ int main()
     Shader shadowAccumulatorShader("shaders/shadow_accumulator.vert", "shaders/shadow_accumulator.frag");
     Shader textureRenderingShader("shaders/textureRendering.vert", "shaders/textureRendering.frag");
 
+    Shader albedoShader(
+        "shaders/pbr_with_shadows/albedo.vert",
+        "shaders/pbr_with_shadows/albedo.frag"
+    );
     // PBR shadows
     Shader pbrShadowsPointLightShader(
         "shaders/pbr_with_shadows/point_light.vert",
@@ -521,33 +525,62 @@ int main()
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         };
 
-        if (!pointLights.empty())
+        albedoShader.use();
+        albedoShader.setMat4("projection"   , projection);
+        albedoShader.setMat4("view"         , view);
+
+        glEnable(GL_DEPTH_TEST);
+        glViewport(0, 0, screenWidth, screenHeight);
+        glBindFramebuffer(GL_FRAMEBUFFER, blendedFramebuffer);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+         // Render objects
+        for (unsigned int i = 0; i < objects.size(); i++)
         {
-            // TODO: find proper fix for depth bug
-            // When just one point light is rendered skybox disappeares - some depth issues.
-            // When two lights are rendered - skybox is rendered, but there are also depth issues
-            // Threee lights - normal rendering
-            // Seems the problem is in bounded depth buffer
-            // Binding lightRenderFramebuffer solved the issue but in cost of performance
-            renderPointLightWithShadows(pointLights[0], blendedFramebuffer);
-            renderPointLightWithShadows(pointLights[0], lightRenderFramebuffer);
-            {
-                glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
-                glDisable(GL_DEPTH_TEST);
-                glClear(GL_COLOR_BUFFER_BIT);
-                shadowAccumulatorShader.use();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
-                glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, blendedTexture);
-                renderScreenQuad();
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            }
-            std::swap(currentBlendingFramebuffer, blendedFramebuffer);
-            std::swap(currentBlendingTexture, blendedTexture);
+            glm::mat4 model = objects[i].getModelMatrix();
+            albedoShader.setMat4("model", model);
+
+            // Fixes normals in case of non-uniform model scaling
+            glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(model)));
+            albedoShader.setMat3("normalMatrix", normalMatrix);
+
+            objects[i].getModel()->Draw(albedoShader);
         }
-        for (auto i = 1; i < pointLights.size(); ++i)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // if (!pointLights.empty())
+        // {
+        //     // TODO: find proper fix for depth bug
+        //     // When just one point light is rendered skybox disappeares - some depth issues.
+        //     // When two lights are rendered - skybox is rendered, but there are also depth issues
+        //     // Threee lights - normal rendering
+        //     // Seems the problem is in bounded depth buffer
+        //     // Binding lightRenderFramebuffer solved the issue but in cost of performance
+        //     renderPointLightWithShadows(pointLights[0], blendedFramebuffer);
+        //     renderPointLightWithShadows(pointLights[0], lightRenderFramebuffer);
+        //     {
+        //         glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+        //         glDisable(GL_DEPTH_TEST);
+        //         glClear(GL_COLOR_BUFFER_BIT);
+        //         shadowAccumulatorShader.use();
+        //         glActiveTexture(GL_TEXTURE0);
+        //         glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+        //         glActiveTexture(GL_TEXTURE1);
+        //         glBindTexture(GL_TEXTURE_2D, blendedTexture);
+        //         renderScreenQuad();
+        //         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        //     }
+        //     std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+        //     std::swap(currentBlendingTexture, blendedTexture);
+        // }
+
+        for (auto i = 0; i < pointLights.size(); ++i)
         {
+            if (!pointLights[i].isOn())
+            {
+                continue;
+            }
             renderPointLightWithShadows(pointLights[i], lightRenderFramebuffer);
             {
                 glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
@@ -566,30 +599,26 @@ int main()
         }
         for (auto i = 0; i < spotLights.size(); ++i)
         {
-           renderSpotLightWithShadows(spotLights[i], lightRenderFramebuffer);
-           {
-               glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
-               glDisable(GL_DEPTH_TEST);
-               glClear(GL_COLOR_BUFFER_BIT);
-               shadowAccumulatorShader.use();
-               glActiveTexture(GL_TEXTURE0);
-               glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
-               glActiveTexture(GL_TEXTURE1);
-               glBindTexture(GL_TEXTURE_2D, blendedTexture);
-               renderScreenQuad();
-               glBindFramebuffer(GL_FRAMEBUFFER, 0);
-           }
-           std::swap(currentBlendingFramebuffer, blendedFramebuffer);
-           std::swap(currentBlendingTexture, blendedTexture);
+            if (!spotLights[i].isOn())
+            {
+                continue;
+            }
+            renderSpotLightWithShadows(spotLights[i], lightRenderFramebuffer);
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+                glDisable(GL_DEPTH_TEST);
+                glClear(GL_COLOR_BUFFER_BIT);
+                shadowAccumulatorShader.use();
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, blendedTexture);
+                renderScreenQuad();
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
+            std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+            std::swap(currentBlendingTexture, blendedTexture);
         }
-
-        // TODO: find proper fix for depth bug
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, lightRenderFramebuffer);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        
-        // blit to default framebuffer.                                           
-        glBlitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         textureRenderingShader.use();
         glActiveTexture(GL_TEXTURE0);
@@ -597,6 +626,23 @@ int main()
         renderScreenQuad();
         glBindTexture(GL_TEXTURE_2D, 0);       
         
+        if (std::any_of(pointLights.begin(), pointLights.end(), [] (const PointLight& light) { return light.isOn(); }) ||
+            std::any_of(spotLights.begin() , spotLights.end() , [] (const SpotLight& light)  { return light.isOn(); }))
+        {
+            // TODO: find proper fix for depth bug
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, lightRenderFramebuffer);
+        }
+        else
+        {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, blendedFramebuffer);
+        }
+
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        
+        // blit to default framebuffer.                                           
+        glBlitFramebuffer(0, 0, screenWidth, screenHeight, 0, 0, screenWidth, screenHeight, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         glEnable(GL_DEPTH_TEST);
 
         shaderLightBox.use();

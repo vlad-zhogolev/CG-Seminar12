@@ -29,7 +29,7 @@ public:
 
 	LightState getState() { return m_state; }
 
-	bool isOn() { return m_state == LightState::On; }
+	bool isOn() const  { return m_state == LightState::On; }
 
 	void switchState() { m_state = isOn() ? LightState::Off : LightState::On; }
 
