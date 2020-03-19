@@ -210,8 +210,7 @@ void main()
 
     float shadow = shadows ? ShadowCalculation(WorldPos) : 0.0;
     
-    vec3 ambient = vec3(0.003) * material.albedo;
-    vec3 color = ambient + (1.0 - shadow) * Lo;
+    vec3 color = (1.0 - shadow) * Lo;
 
     // HDR tonemapping
     color = color / (color + vec3(1.0));
