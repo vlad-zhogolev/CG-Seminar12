@@ -549,32 +549,6 @@ int main()
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        // if (!pointLights.empty())
-        // {
-        //     // TODO: find proper fix for depth bug
-        //     // When just one point light is rendered skybox disappeares - some depth issues.
-        //     // When two lights are rendered - skybox is rendered, but there are also depth issues
-        //     // Threee lights - normal rendering
-        //     // Seems the problem is in bounded depth buffer
-        //     // Binding lightRenderFramebuffer solved the issue but in cost of performance
-        //     renderPointLightWithShadows(pointLights[0], blendedFramebuffer);
-        //     renderPointLightWithShadows(pointLights[0], lightRenderFramebuffer);
-        //     {
-        //         glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
-        //         glDisable(GL_DEPTH_TEST);
-        //         glClear(GL_COLOR_BUFFER_BIT);
-        //         shadowAccumulatorShader.use();
-        //         glActiveTexture(GL_TEXTURE0);
-        //         glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
-        //         glActiveTexture(GL_TEXTURE1);
-        //         glBindTexture(GL_TEXTURE_2D, blendedTexture);
-        //         renderScreenQuad();
-        //         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        //     }
-        //     std::swap(currentBlendingFramebuffer, blendedFramebuffer);
-        //     std::swap(currentBlendingTexture, blendedTexture);
-        // }
-
         for (auto i = 0; i < pointLights.size(); ++i)
         {
             if (!pointLights[i].isOn())
