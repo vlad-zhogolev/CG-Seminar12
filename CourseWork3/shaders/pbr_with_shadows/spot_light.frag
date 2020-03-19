@@ -1,14 +1,18 @@
 #version 330 core
 
-struct PointLight 
+struct SpotLight
 {
     vec3 position;
-    vec3 color;  
-    bool isOn; 
+    vec3 direction;
+    vec3 color;
+    bool isOn;
 
     float constant;
     float linear;
-    float quadratic;    
+    float quadratic;
+
+    float cutOff;  //cosine actually
+    float outerCutOff;
 };
 
 struct Material 
@@ -40,7 +44,7 @@ uniform float refractionRatio;
 uniform vec3 cameraPos;
 
 uniform samplerCube depthMap;
-uniform PointLight pointLight;
+uniform SpotLight spotLight;
 uniform bool shadows;
 
 uniform float far_plane;
@@ -113,11 +117,11 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-vec3 calcPointLight(PointLight light, Material material, vec3 fragmentPositon, vec3 directionToView, vec3 F0)
-{  
+vec3 calcSpotLight(SpotLight light, Material material, vec3 fragmentPositon, vec3 directionToView, vec3 F0)
+{
     vec3 directionToLight = normalize(light.position - fragmentPositon);
-    vec3 halfway = normalize(directionToView + directionToLight);    
-    
+    vec3 halfway = normalize(directionToView + directionToLight);
+       
     // Cook-Torrance BRDF
     float D = distributionGGX(material.normal, halfway, material.roughness);   
     float G = geometrySmith(material.normal, directionToView, directionToLight, material.roughness);      
@@ -126,18 +130,25 @@ vec3 calcPointLight(PointLight light, Material material, vec3 fragmentPositon, v
     vec3 nominator    = D * G * F; 
     float NdotV = max(dot(material.normal, directionToView), 0.0);
     float NdotL = max(dot(material.normal, directionToLight), 0.0);
-    float denominator = 4 * NdotV * NdotL + 0.001; // 0.001  for preventing division by zero.
+    float denominator = 4 * NdotV * NdotL + 0.001; // 0.001 for preventing division by zero.
     vec3 specular = nominator / denominator;
-       
-    // kS is equal to Fresnel 
+        
+    // kS is equal to Fresnel
     vec3 kD = vec3(1.0) - F;
     kD *= 1.0 - material.metallic;     
 
+    // attenuation
     float distance = length(light.position - fragmentPositon);
     float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * distance * distance);
 
+    // intensity
+    float angle = dot(directionToLight, normalize(-light.direction));   
+    float intensity = clamp((angle - light.outerCutOff) / 
+                            (light.cutOff - light.outerCutOff), 
+                            0.0, 1.0);
+
     // scale light by NdotL add to outgoing radiance Lo 
-    return (kD * material.albedo / PI + specular) *  light.color * attenuation * NdotL;
+    return (kD * material.albedo / PI + specular) * intensity * light.color * NdotL;
 }
 
 float ShadowCalculation(vec3 fragPos)
@@ -156,7 +167,7 @@ float ShadowCalculation(vec3 fragPos)
     // // display closestDepth as debug (to visualize depth cubemap)
     // //FragColor = vec4(vec3(closestDepth / far_plane), 1.0);    
 
-    vec3 fragToLight = fragPos - pointLight.position;
+    vec3 fragToLight = fragPos - spotLight.position;
     float currentDepth = length(fragToLight);
     float shadow = 0.0;
     float bias = 0.15;
@@ -195,7 +206,7 @@ void main()
     F0 = mix(F0, material.albedo, material.metallic);
 
     // reflectance equation
-    vec3 Lo = calcPointLight(pointLight, material, WorldPos, directionToView, F0);
+    vec3 Lo = calcSpotLight(spotLight, material, WorldPos, directionToView, F0);
 
     float shadow = shadows ? ShadowCalculation(WorldPos) : 0.0;
     

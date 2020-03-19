@@ -72,9 +72,10 @@ Models models;
 
 // Scene settings
 bool shadows = true;
+bool showCombinedDepthMap = false;
+
 bool shadowsKeyPressed = false;
-bool renderSecondLight = false;
-bool renderSecondLightKeyPressed = false;
+bool showCombinedDepthMapKeyPressed = false;
 
 // Point lights shadow maps size
 const unsigned int POINT_LIGHT_SHADOW_MAP_WIDTH  = 1024; 
@@ -144,6 +145,10 @@ int main()
     Shader pbrShadowsPointLightShader(
         "shaders/pbr_with_shadows/point_light.vert",
         "shaders/pbr_with_shadows/point_light.frag"
+    );
+    Shader pbrShadowsSpotLightShader(
+        "shaders/pbr_with_shadows/spot_light.vert",
+        "shaders/pbr_with_shadows/spot_light.frag"
     );
     
     // Load scene   
@@ -318,105 +323,14 @@ int main()
             100.0f
         );
         glm::mat4 view = camera.GetViewMatrix();
-        /*
-                // Set shader in use and bind view and projection matrices
-                shader.use();
-                shader.setMat4("projection", projection);
-                shader.setMat4("view", view);
-                shader.setVec3("cameraPos", camera.Position);
 
-                // Render objects
-                for (unsigned int i = 0; i < objects.size(); i++)
-                {
-                    glm::mat4 model = objects[i].getModelMatrix();
-                    shader.setMat4("model", model);
-
-                    // Fixes normals in case of non-uniform model scaling
-                    glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(model)));
-                    shader.setMat3("normalMatrix", normalMatrix);
-
-                    objects[i].getModel()->Draw(shader);
-                }
-
-                shader.setVec3("sun.direction", sun.getDirection());
-                shader.setVec3("sun.color",     sun.getColor());
-
-                // Update point lights state
-                for (PointLights::size_type i = 0; i < pointLights.size(); ++i)
-                {
-                    shader.setVec3("pointLights[" + to_string(i) + "].position",    pointLights[i].getPosition());
-                    shader.setBool("pointLights[" + to_string(i) + "].isOn",        pointLights[i].isOn());
-                }
-
-                // Update spot lights state
-                for (SpotLights::size_type i = 0; i < spotLights.size(); ++i)
-                {
-                    shader.setVec3("spotLights[" + to_string(i) + "].position", spotLights[i].getPosition());
-                    shader.setBool("spotLights[" + to_string(i) + "].isOn",     spotLights[i].isOn());
-                }
-
-                // Update directional lights state
-                for (DirectionalLights::size_type i = 0; i < dirLights.size(); ++i)
-                {
-                    shader.setBool("dirLights[" + to_string(i) + "].isOn",  dirLights[i].isOn());
-                }
-
-                // Render lights on top of scene
-                shaderLightBox.use();
-                shaderLightBox.setMat4("projection", projection);
-                shaderLightBox.setMat4("view", view);
-
-                for (unsigned int i = 0; i < pointLights.size(); ++i)
-                {
-                    glm::mat4 model = glm::mat4();
-                    model = glm::translate(model, pointLights[i].getPosition());
-                    model = glm::scale(model, glm::vec3(0.125f));
-                    shaderLightBox.setMat4("model", model);
-                    shaderLightBox.setVec3("lightColor", pointLights[i].getColor());
-                    renderCube();
-                }
-
-                for (unsigned int i = 0; i < spotLights.size(); ++i)
-                {
-                    glm::mat4 model = glm::mat4();
-                    model = glm::translate(model, spotLights[i].getPosition());
-                    glm::quat rotation;
-                    rotation = glm::rotation(glm::vec3(0.0f, -1.0f, 0.0f), glm::normalize(spotLights[i].getDirection()));
-                    model *= glm::toMat4(rotation);
-                    model = glm::scale(model, glm::vec3(0.25f));
-                    shaderLightBox.setMat4("model", model);
-                    shaderLightBox.setVec3("lightColor", spotLights[i].getColor());
-                    renderPyramid();
-                }
-
-                // Setup skybox shader and OpenGL for skybox rendering
-                skyboxShader.use();
-                skyboxShader.setMat4("projection", projection);
-                skyboxShader.setMat4("view", glm::mat4(glm::mat3(camera.GetViewMatrix())));
-                skyboxShader.setInt("skybox", SKYBOX_TEXTURE_INDEX);
-
-                // Render skybox
-                renderSkybox(cubemapTexture);
-        */
-
-        // move light position over time
-        //lightPos.z = sin(glfwGetTime() * 0.5) * 3.0;
-
-
-
-        // // render
-        // // ------
-        // glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         auto renderPointLightWithShadows = [
             &simpleDepthShader, 
             &pbrShadowsPointLightShader,
             &view, 
             &projection, 
             &depthMapFBO, 
-            &woodTexture, 
-            &depthCubemap,
-            &cubemapTexture](
+            &depthCubemap](
             PointLight& pointLight,
             GLuint& renderingFramebuffer)
         {
@@ -424,7 +338,7 @@ int main()
             glm::vec3 lightPos = pointLight.getPosition();
             // 0. create depth cubemap transformation matrices
             // -----------------------------------------------
-            float near_plane = 1.0f;
+            float near_plane = 0.1f;
             float far_plane = 20.0f;
             glm::mat4 shadowProj = glm::perspective(
                 glm::radians(90.0f),
@@ -480,19 +394,14 @@ int main()
             pbrShadowsPointLightShader.setFloat("pointLight.quadratic", pointLight.getQuadratic());
             pbrShadowsPointLightShader.setBool( "pointLight.isOn",      pointLight.isOn());
 
-            pbrShadowsPointLightShader.setVec3( "cameraPos", camera.Position);
-            pbrShadowsPointLightShader.setFloat("far_plane", far_plane);
-            pbrShadowsPointLightShader.setInt("shadows", shadows); // enable/disable shadows by pressing 'SPACE'
-            //pbrShadowsPointLightShader.setInt(  "skybox", SKYBOX_TEXTURE_INDEX);
-            pbrShadowsPointLightShader.setInt(  "depthMap", SHADOW_DEPTH_MAP_INDEX);
-
-
+            pbrShadowsPointLightShader.setVec3( "cameraPos" , camera.Position);
+            pbrShadowsPointLightShader.setFloat("far_plane" , far_plane);
+            pbrShadowsPointLightShader.setInt(  "shadows"   , shadows); // enable/disable shadows by pressing 'SPACE'
+            pbrShadowsPointLightShader.setInt(  "depthMap"  , SHADOW_DEPTH_MAP_INDEX);
+            
             glActiveTexture(GL_TEXTURE0 + SHADOW_DEPTH_MAP_INDEX);
             glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-            // glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_INDEX);
-            // glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
             
-            // render models
             // Render objects
             for (unsigned int i = 0; i < objects.size(); i++)
             {
@@ -508,19 +417,16 @@ int main()
 
             glActiveTexture(GL_TEXTURE0 + SHADOW_DEPTH_MAP_INDEX);
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-            // glActiveTexture(GL_TEXTURE0 + SKYBOX_TEXTURE_INDEX);
-            // glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         };
 
         auto renderSpotLightWithShadows = [
             &simpleDepthShader, 
-            &spotShadowsShader,
+            &pbrShadowsSpotLightShader,
             &view, 
             &projection, 
             &depthMapFBO, 
-            &woodTexture, 
             &depthCubemap](
             SpotLight& spotLight,
             GLuint& renderingFramebuffer)
@@ -529,7 +435,7 @@ int main()
             glm::vec3 lightPos = spotLight.getPosition();
             // 0. create depth cubemap transformation matrices
             // -----------------------------------------------
-            float near_plane = 1.0f;
+            float near_plane = 0.1f;
             float far_plane = 25.0f;
             glm::mat4 shadowProj = glm::perspective(
                 glm::radians(90.0f),
@@ -557,7 +463,15 @@ int main()
             }
             simpleDepthShader.setFloat("far_plane", far_plane);
             simpleDepthShader.setVec3("lightPos", lightPos);
-            renderScene(simpleDepthShader);
+
+            for (unsigned int i = 0; i < objects.size(); i++)
+            {
+                glm::mat4 model = objects[i].getModelMatrix();
+                simpleDepthShader.setMat4("model", model);
+
+                objects[i].getModel()->Draw(simpleDepthShader);
+            }
+
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
             // 2. render scene as normal 
@@ -565,27 +479,45 @@ int main()
             glViewport(0, 0, screenWidth, screenHeight);
             glBindFramebuffer(GL_FRAMEBUFFER, renderingFramebuffer);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            spotShadowsShader.use();
-            spotShadowsShader.setMat4("projection", projection);
-            spotShadowsShader.setMat4("view", view);
-            // set lighting uniforms
-            spotShadowsShader.setVec3( "spotLight.position",    spotLight.getPosition());
-            spotShadowsShader.setVec3( "spotLight.color",       spotLight.getColor());
-            spotShadowsShader.setVec3( "spotLight.direction",   spotLight.getDirection());
-            spotShadowsShader.setFloat("spotLight.constant",    spotLight.getConstant());
-            spotShadowsShader.setFloat("spotLight.linear",      spotLight.getLinear());
-            spotShadowsShader.setFloat("spotLight.quadratic",   spotLight.getQuadratic());
-            spotShadowsShader.setFloat("spotLight.cutOff",      glm::cos(spotLight.getCutOffInRadians()));
-            spotShadowsShader.setFloat("spotLight.outerCutOff", glm::cos(spotLight.getOuterCutOffInRadians()));
-            //spotShadowsShader.setBool("spotLights[" + to_string(i) + "].isOn", spotLights[i].isOn());
-            spotShadowsShader.setVec3( "viewPos", camera.Position);
-            spotShadowsShader.setInt(  "shadows", shadows); // enable/disable shadows by pressing 'SPACE'
-            spotShadowsShader.setFloat("far_plane", far_plane);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, woodTexture);
-            glActiveTexture(GL_TEXTURE1);
+
+            // Shader configuration
+            pbrShadowsSpotLightShader.use();
+            pbrShadowsSpotLightShader.setMat4("projection", projection);
+            pbrShadowsSpotLightShader.setMat4("view", view);
+            // Set lighting uniforms
+            pbrShadowsSpotLightShader.setVec3( "spotLight.position"     , spotLight.getPosition());
+            pbrShadowsSpotLightShader.setVec3( "spotLight.color"        , spotLight.getColor());
+            pbrShadowsSpotLightShader.setVec3( "spotLight.direction"    , spotLight.getDirection());
+            pbrShadowsSpotLightShader.setFloat("spotLight.constant"     , spotLight.getConstant());
+            pbrShadowsSpotLightShader.setFloat("spotLight.linear"       , spotLight.getLinear());
+            pbrShadowsSpotLightShader.setFloat("spotLight.quadratic"    , spotLight.getQuadratic());
+            pbrShadowsSpotLightShader.setFloat("spotLight.cutOff"       , glm::cos(spotLight.getCutOffInRadians()));
+            pbrShadowsSpotLightShader.setFloat("spotLight.outerCutOff"  , glm::cos(spotLight.getOuterCutOffInRadians()));
+
+            pbrShadowsSpotLightShader.setVec3( "cameraPos"  , camera.Position);
+            pbrShadowsSpotLightShader.setInt(  "shadows"    , shadows); // enable/disable shadows by pressing 'SPACE'
+            pbrShadowsSpotLightShader.setFloat("far_plane"  , far_plane);
+            pbrShadowsSpotLightShader.setInt(  "depthMap"   , SHADOW_DEPTH_MAP_INDEX);
+
+            glActiveTexture(GL_TEXTURE0 + SHADOW_DEPTH_MAP_INDEX);
             glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-            renderScene(spotShadowsShader);
+            
+            // Render objects
+            for (unsigned int i = 0; i < objects.size(); i++)
+            {
+                glm::mat4 model = objects[i].getModelMatrix();
+                pbrShadowsSpotLightShader.setMat4("model", model);
+
+                // Fixes normals in case of non-uniform model scaling
+                glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(model)));
+                pbrShadowsSpotLightShader.setMat3("normalMatrix", normalMatrix);
+
+                objects[i].getModel()->Draw(pbrShadowsSpotLightShader);
+            }
+
+            glActiveTexture(GL_TEXTURE0 + SHADOW_DEPTH_MAP_INDEX);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         };
 
@@ -632,24 +564,24 @@ int main()
             std::swap(currentBlendingFramebuffer, blendedFramebuffer);
             std::swap(currentBlendingTexture, blendedTexture);
         }
-        //for (auto i = 0; i < spotLights.size(); ++i)
-        //{
-        //    renderSpotLightWithShadows(spotLights[i], lightRenderFramebuffer);
-        //    {
-        //        glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
-        //        glDisable(GL_DEPTH_TEST);
-        //        glClear(GL_COLOR_BUFFER_BIT);
-        //        shadowAccumulatorShader.use();
-        //        glActiveTexture(GL_TEXTURE0);
-        //        glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
-        //        glActiveTexture(GL_TEXTURE1);
-        //        glBindTexture(GL_TEXTURE_2D, blendedTexture);
-        //        renderScreenQuad();
-        //        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        //    }
-        //    std::swap(currentBlendingFramebuffer, blendedFramebuffer);
-        //    std::swap(currentBlendingTexture, blendedTexture);
-        //}
+        for (auto i = 0; i < spotLights.size(); ++i)
+        {
+           renderSpotLightWithShadows(spotLights[i], lightRenderFramebuffer);
+           {
+               glBindFramebuffer(GL_FRAMEBUFFER, currentBlendingFramebuffer);
+               glDisable(GL_DEPTH_TEST);
+               glClear(GL_COLOR_BUFFER_BIT);
+               shadowAccumulatorShader.use();
+               glActiveTexture(GL_TEXTURE0);
+               glBindTexture(GL_TEXTURE_2D, lightRenderTexture);
+               glActiveTexture(GL_TEXTURE1);
+               glBindTexture(GL_TEXTURE_2D, blendedTexture);
+               renderScreenQuad();
+               glBindFramebuffer(GL_FRAMEBUFFER, 0);
+           }
+           std::swap(currentBlendingFramebuffer, blendedFramebuffer);
+           std::swap(currentBlendingTexture, blendedTexture);
+        }
 
         // TODO: find proper fix for depth bug
         glBindFramebuffer(GL_READ_FRAMEBUFFER, lightRenderFramebuffer);
@@ -666,6 +598,35 @@ int main()
         glBindTexture(GL_TEXTURE_2D, 0);       
         
         glEnable(GL_DEPTH_TEST);
+
+        shaderLightBox.use();
+        shaderLightBox.setMat4("projection", projection);
+        shaderLightBox.setMat4("view", view);
+
+        for (unsigned int i = 0; i < pointLights.size(); ++i)
+        {
+            glm::mat4 model = glm::mat4();
+            model = glm::translate(model, pointLights[i].getPosition());
+            model = glm::scale(model, glm::vec3(0.125f));
+            shaderLightBox.setMat4("model", model);
+            shaderLightBox.setVec3("lightColor", pointLights[i].getColor());
+            renderCube();
+        }
+
+        for (unsigned int i = 0; i < spotLights.size(); ++i)
+        {
+            glm::mat4 model = glm::mat4();
+            model = glm::translate(model, spotLights[i].getPosition());
+            glm::quat rotation;
+            rotation = glm::rotation(glm::vec3(0.0f, -1.0f, 0.0f), glm::normalize(spotLights[i].getDirection()));
+            model *= glm::toMat4(rotation);
+            model = glm::scale(model, glm::vec3(0.25f));
+            shaderLightBox.setMat4("model", model);
+            shaderLightBox.setVec3("lightColor", spotLights[i].getColor());
+            renderPyramid();
+        }
+
+
         // Setup skybox shader and OpenGL for skybox rendering
         skyboxShader.use();
         skyboxShader.setMat4("projection", projection);
@@ -1150,14 +1111,14 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         shadowsKeyPressed = false;
     }
 
-    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS && !renderSecondLightKeyPressed)
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS && !showCombinedDepthMapKeyPressed)
     {
-        renderSecondLight = !renderSecondLight;
-        renderSecondLightKeyPressed = true;
+        showCombinedDepthMap = !showCombinedDepthMap;
+        showCombinedDepthMapKeyPressed = true;
     }
     if (glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE)
     {
-        renderSecondLightKeyPressed = false;
+        showCombinedDepthMapKeyPressed = false;
     }
 }
 
